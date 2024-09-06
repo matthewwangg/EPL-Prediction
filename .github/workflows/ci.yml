@@ -27,6 +27,16 @@ jobs:
 
   build-and-test-node:
     runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:14
+        env:
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_NAME }}
+          POSTGRES_DB: ${{ secrets.DB_NAME }}
+        ports:
+          - 5432:5432
+
     steps:
       - uses: actions/checkout@v2
 
@@ -37,8 +47,10 @@ jobs:
         run: docker build -t node-backend ./app/backend/node
 
       - name: Run and Test Node.js Backend
+        env:
+          DATABASE_URL: postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/${{ secrets.DB_NAME }}
         run: |
-          docker run -d --name node-app -p 5000:5000 node-backend
+          docker run -d --name node-app -p 5000:5000 --network="host" -e DATABASE_URL=$DATABASE_URL node-backend
           timeout=30  
           while ! curl --fail http://localhost:5000/api/predict/test; do
             sleep 1
@@ -80,4 +92,5 @@ jobs:
         run: docker exec python-app pytest /app/tests
 
       - name: Stop Python Container
+        run: docker stop python-app
         run: docker stop python-app
