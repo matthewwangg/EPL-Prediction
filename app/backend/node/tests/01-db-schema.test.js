@@ -8,7 +8,6 @@ const db = new Pool({
     port: 5432,
 });
 
-
 async function createSchema() {
     try {
         await db.query('BEGIN');
@@ -33,21 +32,35 @@ async function createSchema() {
     }
 }
 
+async function resetDatabase() {
+    try {
+        await db.query('BEGIN');
+        await db.query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+        await db.query('COMMIT');
+        console.log('Database reset successful!');
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error('Error resetting database:', err);
+    }
+}
+
 describe('Database Schema Tests', () => {
     beforeAll(async () => {
         await createSchema();
     });
 
     afterAll(async () => {
+        // Reset the database state after the test is done
+        await resetDatabase();
         await db.end();
     });
 
     it('should create the "users" table with correct schema', async () => {
         const tableCheckQuery = `
-      SELECT column_name, data_type
-      FROM information_schema.columns
-      WHERE table_name = 'users';
-    `;
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'users';
+        `;
 
         const result = await db.query(tableCheckQuery);
 
@@ -72,10 +85,10 @@ describe('Database Schema Tests', () => {
 
     it('should insert a user into the "users" table', async () => {
         const insertUserQuery = `
-      INSERT INTO users (username, password_hash, email, role)
-      VALUES ('testuserschema', 'hashedpassword123', 'testuserschema@example.com', 'admin')
-      RETURNING *;
-    `;
+            INSERT INTO users (username, password_hash, email, role)
+            VALUES ('testuserschema', 'hashedpassword123', 'testuserschema@example.com', 'admin')
+            RETURNING *;
+        `;
         const result = await db.query(insertUserQuery);
 
         expect(result.rows.length).toBe(1);
@@ -86,9 +99,9 @@ describe('Database Schema Tests', () => {
 
     it('should fail to insert a duplicate username into the "users" table', async () => {
         const duplicateUserQuery = `
-      INSERT INTO users (username, password_hash, email, role)
-      VALUES ('testuserschema', 'newhashedpassword', 'newemail@example.com', 'user');
-    `;
+            INSERT INTO users (username, password_hash, email, role)
+            VALUES ('testuserschema', 'newhashedpassword', 'newemail@example.com', 'user');
+        `;
 
         await expect(db.query(duplicateUserQuery)).rejects.toThrow();
     });

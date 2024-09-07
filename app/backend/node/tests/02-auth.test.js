@@ -30,22 +30,27 @@ describe('Auth Routes', () => {
     });
 
     beforeEach(async () => {
-        // Clear the users table before each test
+        // Clear the users table before each test to ensure independence
         await db.query('DELETE FROM users');
 
         // Hash password using real bcrypt
         const hashedPassword = await bcrypt.hash('password123', 10);
 
-        // Insert a test user
+        // Insert a test user with unique credentials for this test
         await db.query(`
             INSERT INTO users (username, password_hash, email, role)
-            VALUES ('testuser', $1, 'testuser@example.com', 'admin')`,
+            VALUES ('testuserauth', $1, 'testuserauth@example.com', 'admin')`,
             [hashedPassword]
         );
     });
 
+    afterEach(async () => {
+        // Ensure table is cleaned up after each test
+        await db.query('TRUNCATE TABLE users RESTART IDENTITY');
+    });
+
     afterAll(async () => {
-        // Clean up the database after tests
+        // Clean up the database after all tests in this suite
         await db.query('DROP TABLE IF EXISTS users');
         await db.end();
     });
@@ -57,7 +62,7 @@ describe('Auth Routes', () => {
 
         const response = await request(app)
             .post('/api/auth/login')
-            .send({ username: 'testuser', password: 'password123' });
+            .send({ username: 'testuserauth', password: 'password123' });
 
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('token', mockToken);
@@ -75,7 +80,7 @@ describe('Auth Routes', () => {
     it('should return 400 for incorrect password', async () => {
         const response = await request(app)
             .post('/api/auth/login')
-            .send({ username: 'testuser', password: 'wrongpassword' });
+            .send({ username: 'testuserauth', password: 'wrongpassword' });
 
         expect(response.status).toBe(400);
         expect(response.body).toHaveProperty('error', 'Invalid credentials');

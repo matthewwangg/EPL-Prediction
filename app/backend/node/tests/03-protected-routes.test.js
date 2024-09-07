@@ -1,7 +1,6 @@
 const request = require('supertest');
 const app = require('../index');
 const bcrypt = require('bcrypt');
-let token;
 const { Pool } = require('pg');
 
 const db = new Pool({
@@ -13,7 +12,12 @@ const db = new Pool({
 });
 
 describe('Protected Routes', () => {
-    beforeAll(async () => {
+
+    // Recreate the users table before each test
+    beforeEach(async () => {
+        await db.query(`
+            DROP TABLE IF EXISTS users;
+        `);
         await db.query(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id SERIAL PRIMARY KEY,
@@ -34,46 +38,54 @@ describe('Protected Routes', () => {
             VALUES ('testuser', $1, 'testuser@example.com', 'admin')`,
             [hashedPassword]
         );
-
-        const response = await request(app)
-            .post('/api/auth/login')
-            .send({ username: 'testuser', password: 'password123' });
-
-        token = response.body.token;
     });
 
+    // Close the database connection after all tests
     afterAll(async () => {
-        await db.query('DROP TABLE IF EXISTS users');
         await db.end();
     });
 
     it('should return 401 Unauthorized for accessing /api/predict without token', async () => {
         const response = await request(app)
             .post('/api/predict')
-            .set('Authorization', `Bearer `);
+            .set('Authorization', `Bearer `); // Invalid token
         expect(response.status).toBe(401);
     });
 
     it('should return 500 for accessing /api/predict with a valid token but with Flask not running', async () => {
+        // Login to get a valid token
+        const loginResponse = await request(app)
+            .post('/api/auth/login')
+            .send({ username: 'testuser', password: 'password123' });
+        const token = loginResponse.body.token;
+
+        // Attempt to access the route with the valid token
         const response = await request(app)
             .post('/api/predict')
-            .set('Authorization', `Bearer ${token}`);
+            .set('Authorization', `Bearer ${token}`); // Valid token but Flask not running
 
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(500); // Expecting Flask to be down and return 500
     });
 
     it('should return 401 Unauthorized for accessing /api/custom-predict without token', async () => {
         const response = await request(app)
             .post('/api/custom-predict/predict-custom')
-            .set('Authorization', `Bearer `);
+            .set('Authorization', `Bearer `); // Invalid token
         expect(response.status).toBe(401);
     });
 
     it('should return 500 for accessing /api/custom-predict with a valid token but with Flask not running', async () => {
+        // Login to get a valid token
+        const loginResponse = await request(app)
+            .post('/api/auth/login')
+            .send({ username: 'testuser', password: 'password123' });
+        const token = loginResponse.body.token;
+
+        // Attempt to access the route with the valid token
         const response = await request(app)
             .post('/api/custom-predict/predict-custom')
             .set('Authorization', `Bearer ${token}`);
 
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(500); // Expecting Flask to be down and return 500
     });
 });
