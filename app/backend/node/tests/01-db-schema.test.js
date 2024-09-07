@@ -1,5 +1,37 @@
-const db = require('../config/db'); // Assuming your DB config is in config/db.js
-const createSchema = require('../scripts/db-schema-setup');
+const { Pool } = require("pg");
+
+const db = new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: String(process.env.DB_PASSWORD),
+    port: 5432,
+});
+
+
+async function createSchema() {
+    try {
+        await db.query('BEGIN');
+
+        const createUsersTable = `
+            CREATE TABLE IF NOT EXISTS users (
+                user_id SERIAL PRIMARY KEY,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                email VARCHAR(255) UNIQUE,
+                role VARCHAR(100),
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `;
+
+        await db.query(createUsersTable);
+        await db.query('COMMIT');
+        console.log('Schema creation successful!');
+    } catch (err) {
+        await db.query('ROLLBACK');
+        console.error('Error creating schema:', err);
+    }
+}
 
 describe('Database Schema Tests', () => {
     beforeAll(async () => {
@@ -41,21 +73,21 @@ describe('Database Schema Tests', () => {
     it('should insert a user into the "users" table', async () => {
         const insertUserQuery = `
       INSERT INTO users (username, password_hash, email, role)
-      VALUES ('testuser', 'hashedpassword123', 'testuser@example.com', 'admin')
+      VALUES ('testuserschema', 'hashedpassword123', 'testuserschema@example.com', 'admin')
       RETURNING *;
     `;
         const result = await db.query(insertUserQuery);
 
         expect(result.rows.length).toBe(1);
-        expect(result.rows[0].username).toBe('testuser');
-        expect(result.rows[0].email).toBe('testuser@example.com');
+        expect(result.rows[0].username).toBe('testuserschema');
+        expect(result.rows[0].email).toBe('testuserschema@example.com');
         expect(result.rows[0].role).toBe('admin');
     });
 
     it('should fail to insert a duplicate username into the "users" table', async () => {
         const duplicateUserQuery = `
       INSERT INTO users (username, password_hash, email, role)
-      VALUES ('testuser', 'newhashedpassword', 'newemail@example.com', 'user');
+      VALUES ('testuserschema', 'newhashedpassword', 'newemail@example.com', 'user');
     `;
 
         await expect(db.query(duplicateUserQuery)).rejects.toThrow();
